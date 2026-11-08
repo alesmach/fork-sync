@@ -18,4 +18,7 @@ Ve forcích samotných jsou GitHub Actions vypnuté, běží jen tady.
 - Sync jen posouvá větev dopředu. Pokud má fork na hlavní větvi vlastní commity, sync selže
   a nic nepřepíše.
 - Forky, které se synchronizovat nemají, jsou v proměnné `SKIP` v `.github/workflows/sync.yml`.
+- Repo je veřejné, aby Actions běžely zdarma. Token je jen v secretu.
+- GitHub ve veřejném repu vypíná plánované workflow po 60 dnech bez aktivity, proto workflow
+  1. dne v měsíci commitne soubor `.keepalive`.
 - Když sync selže, běh skončí chybou a GitHub pošle e-mail. Přehled je v souhrnu běhu.
