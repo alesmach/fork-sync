@@ -1,0 +1,68 @@
+name: Sync forks
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # každý den ve 3:17 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sync-forks
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN }}
+      OWNER: ${{ github.repository_owner }}
+      # Forky, které se nemají synchronizovat (oddělené mezerou).
+      # NuvioMobile: upstream už nemá větev main (výchozí je cmp-rewrite).
+      SKIP: "NuvioMobile"
+    steps:
+      - name: Sync all forks with upstream
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::Chybí secret FORK_SYNC_TOKEN."
+            exit 1
+          fi
+
+          repos=$(gh repo list "$OWNER" --fork --no-archived --limit 1000 \
+            --json nameWithOwner -q '.[].nameWithOwner') || exit 1
+
+          ok=0; failed=0; skipped=0
+          {
+            echo "## Sync forků"
+            echo
+            echo "| Fork | Výsledek |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for repo in $repos; do
+            name=${repo#*/}
+            if [[ " $SKIP " == *" $name "* ]]; then
+              echo "⏭️  $repo (přeskočeno)"
+              echo "| $repo | ⏭️ přeskočeno |" >> "$GITHUB_STEP_SUMMARY"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            if out=$(gh repo sync "$repo" 2>&1); then
+              echo "✅ $repo: $out"
+              echo "| $repo | ✅ ${out//|/\\|} |" >> "$GITHUB_STEP_SUMMARY"
+              ok=$((ok + 1))
+            else
+              echo "::warning title=$repo::${out//$'\n'/ }"
+              echo "| $repo | ❌ ${out//$'\n'/ } |" >> "$GITHUB_STEP_SUMMARY"
+              failed=$((failed + 1))
+            fi
+          done
+
+          echo
+          echo "Hotovo: $ok OK, $failed chyb, $skipped přeskočeno."
+          [ "$failed" -eq 0 ]
